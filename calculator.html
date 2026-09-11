@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Calculator</title>
+<style>
+  :root{
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --btn: #334155;
+    --btn-hover: #3f4f68;
+    --op: #4b5f7f;
+    --accent: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: var(--bg);
+    font-family: 'Segoe UI', Arial, sans-serif;
+  }
+  .calculator{
+    width: 340px;
+    background: var(--panel);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+  }
+  .display{
+    background: rgba(0,0,0,0.25);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    text-align: right;
+    min-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+  .display .expression{
+    color: var(--muted);
+    font-size: 16px;
+    min-height: 20px;
+    word-break: break-all;
+  }
+  .display .current{
+    color: var(--text);
+    font-size: 36px;
+    font-weight: 500;
+    word-break: break-all;
+  }
+  .keys{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  button{
+    border: none;
+    border-radius: 14px;
+    background: var(--btn);
+    color: var(--text);
+    font-size: 20px;
+    padding: 18px 0;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+  }
+  button:hover{ background: var(--btn-hover); }
+  button:active{ transform: scale(0.96); }
+  button.op{ background: var(--op); }
+  button.op:hover{ background: #5a729a; }
+  button.equals{
+    background: var(--accent);
+    color: #1e293b;
+    font-weight: 700;
+    grid-column: span 2;
+  }
+  button.equals:hover{ background: #ffb224; }
+  button.zero{ grid-column: span 2; }
+  button.clear{ color: #f87171; }
+</style>
+</head>
+<body>
+
+<div class="calculator">
+  <div class="display">
+    <div class="expression" id="expression">&nbsp;</div>
+    <div class="current" id="current">0</div>
+  </div>
+
+  <div class="keys">
+    <button class="clear" data-action="clear">C</button>
+    <button class="op" data-action="backspace">⌫</button>
+    <button class="op" data-value="%">%</button>
+    <button class="op" data-value="/">÷</button>
+
+    <button data-value="7">7</button>
+    <button data-value="8">8</button>
+    <button data-value="9">9</button>
+    <button class="op" data-value="*">×</button>
+
+    <button data-value="4">4</button>
+    <button data-value="5">5</button>
+    <button data-value="6">6</button>
+    <button class="op" data-value="-">−</button>
+
+    <button data-value="1">1</button>
+    <button data-value="2">2</button>
+    <button data-value="3">3</button>
+    <button class="op" data-value="+">+</button>
+
+    <button class="zero" data-value="0">0</button>
+    <button data-value=".">.</button>
+    <button class="equals" data-action="equals">=</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const expressionEl = document.getElementById('expression');
+  const currentEl = document.getElementById('current');
+
+  let current = '0';      // number currently being typed
+  let expression = '';    // full expression string, e.g. "12 + 5"
+  let justEvaluated = false;
+
+  function updateDisplay(){
+    expressionEl.textContent = expression || '\u00A0';
+    currentEl.textContent = current;
+  }
+
+  function inputDigit(d){
+    if (justEvaluated) {
+      current = d === '.' ? '0.' : d;
+      expression = '';
+      justEvaluated = false;
+      updateDisplay();
+      return;
+    }
+    if (d === '.') {
+      if (current.includes('.')) return;
+      current = current === '' ? '0.' : current + '.';
+    } else {
+      current = (current === '0') ? d : current + d;
+    }
+    updateDisplay();
+  }
+
+  function inputOperator(op){
+    justEvaluated = false;
+    if (op === '%') {
+      current = String(parseFloat(current || '0') / 100);
+      updateDisplay();
+      return;
+    }
+    // Fold current number into the running expression
+    expression = (expression + ' ' + current + ' ' + symbolFor(op)).trim();
+    current = '0';
+    updateDisplay();
+  }
+
+  function symbolFor(op){
+    return { '+':'+', '-':'−', '*':'×', '/':'÷' }[op] || op;
+  }
+
+  function opForEval(sym){
+    return { '+':'+', '−':'-', '×':'*', '÷':'/' }[sym] || sym;
+  }
+
+  function clearAll(){
+    current = '0';
+    expression = '';
+    justEvaluated = false;
+    updateDisplay();
+  }
+
+  function backspace(){
+    if (justEvaluated) { clearAll(); return; }
+    current = current.length > 1 ? current.slice(0, -1) : '0';
+    updateDisplay();
+  }
+
+  function evaluate(){
+    const fullExpr = (expression + ' ' + current).trim();
+    if (!fullExpr) return;
+
+    // Convert display symbols back to real operators for evaluation
+    const evalReady = fullExpr
+      .split(' ')
+      .map(tok => (/^[+\-*/]$/.test(opForEval(tok)) ? opForEval(tok) : tok))
+      .join(' ');
+
+    try {
+      const result = safeEval(evalReady);
+      expression = fullExpr + ' =';
+      current = trimResult(result);
+    } catch (e) {
+      current = 'Error';
+      expression = '';
+    }
+    justEvaluated = true;
+    updateDisplay();
+  }
+
+  function trimResult(n){
+    if (!isFinite(n)) return 'Error';
+    // Avoid floating point noise like 0.1 + 0.2
+    return String(Math.round((n + Number.EPSILON) * 1e10) / 1e10);
+  }
+
+  // Minimal safe arithmetic evaluator (tokens separated by spaces, left-to-right
+  // with standard * / precedence handled via two passes)
+  function safeEval(str){
+    const tokens = str.split(' ').filter(Boolean);
+    // First pass: * and /
+    let pass1 = [];
+    let i = 0;
+    pass1.push(parseFloat(tokens[i++]));
+    while (i < tokens.length) {
+      const op = tokens[i++];
+      const num = parseFloat(tokens[i++]);
+      if (op === '*') {
+        pass1[pass1.length - 1] *= num;
+      } else if (op === '/') {
+        pass1[pass1.length - 1] /= num;
+      } else {
+        pass1.push(op, num);
+      }
+    }
+    // Second pass: + and -
+    let result = pass1[0];
+    for (let j = 1; j < pass1.length; j += 2) {
+      const op = pass1[j];
+      const num = pass1[j + 1];
+      if (op === '+') result += num;
+      else if (op === '-') result -= num;
+    }
+    return result;
+  }
+
+  document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { action, value } = btn.dataset;
+      if (action === 'clear') return clearAll();
+      if (action === 'backspace') return backspace();
+      if (action === 'equals') return evaluate();
+      if (value === '+' || value === '-' || value === '*' || value === '/' || value === '%') {
+        return inputOperator(value);
+      }
+      inputDigit(value);
+    });
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (/^[0-9.]$/.test(e.key)) return inputDigit(e.key);
+    if (['+','-','*','/'].includes(e.key)) return inputOperator(e.key);
+    if (e.key === 'Enter' || e.key === '=') { e.preventDefault(); return evaluate(); }
+    if (e.key === 'Backspace') return backspace();
+    if (e.key === 'Escape') return clearAll();
+    if (e.key === '%') return inputOperator('%');
+  });
+
+  updateDisplay();
+})();
+</script>
+
+</body>
+</html>
